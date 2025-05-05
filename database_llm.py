@@ -1,104 +1,66 @@
-import subprocess
 import paramiko
-import getpass
+from getpass import getpass
 from llama_cpp import Llama
-import re
 
-# === CONFIGURATION ===
-MODEL_PATH = "Phi-3.5-mini-instruct-Q4_K_M.gguf"  # Replace with your actual model path
-SCHEMA_FILE = "llm_schema_subset.sql"
-ILAB_HOST = "ilab.rutgers.edu"
-ILAB_SCRIPT_PATH = "python3 ilab_script.py"
+def get_llm_response(prompt, llm):
+    result = llm(prompt, max_tokens=200, stop=["\n"])
+    return result['choices'][0]['text']
 
-# === Load the schema for the prompt ===
-def load_schema():
-    with open(SCHEMA_FILE, "r") as f:
-        return f.read()
+def extract_sql(text):
+    for line in text.strip().splitlines():
+        if line.strip().lower().startswith("select"):
+            return line.strip().rstrip(";") + ";"
+    return None
 
-# === Build the prompt for the LLM ===
-def generate_prompt(schema_text, user_question):
-    return f"""You are a helpful SQL assistant.
-Using the following database schema:
-
-{schema_text}
-
-Write a SQL SELECT query to answer this question:
-{user_question}
-
-Only output the SQL query and nothing else.
-"""
-
-# === Extract SQL query from LLM response ===
-def extract_sql(response_text):
-    # First try to extract from inside a ```sql ... ``` block
-    match = re.search(r"```sql(.*?)```", response_text, re.DOTALL | re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
-
-    # Next try to find the first SELECT statement
-    match = re.search(r"(SELECT\s.+?;)", response_text, re.IGNORECASE | re.DOTALL)
-    if match:
-        return match.group(1).strip()
-
-    # Fallback to returning raw response
-    return response_text.strip()
-
-# === Connect to ILAB via SSH and run the SQL query ===
-def run_query_over_ssh(query, username, password):
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(ILAB_HOST, username=username, password=password)
-
-    # Escape quotes in query
-    safe_query = query.replace('"', '\\"')
-
-    command = f'{ILAB_SCRIPT_PATH} "{safe_query}"'
-    stdin, stdout, stderr = ssh.exec_command(command)
-
+def send_query_over_ssh(sql, ssh_host, username, password):
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(ssh_host, username=username, password=password)
+    print("connected")
+    command = f'python3 ilab_script.py {username} "{sql}"'
+    stdin, stdout, stderr = client.exec_command(command)
+    print(command)
+    print("executed")
     output = stdout.read().decode()
     error = stderr.read().decode()
-    ssh.close()
+    print("response")
+    client.close()
+    return output, error
 
-    if error:
-        print("[!] Error from ILAB script:")
-        print(error)
-    return output
-
-# === Main Program Loop ===
 def main():
-    schema = load_schema()
-    username = input("Enter your ILAB username: ")
-    password = getpass.getpass("Enter your ILAB password (hidden): ")
+    llm = Llama.from_pretrained(repo_id="bartowski/Phi-3.5-mini-instruct-GGUF", filename="Phi-3.5-mini-instruct-IQ2_M.gguf",)
+    #llm = Llama(model_path="Phi-3.5-mini-instruct-Q4_K_M.gguf")
 
-    print("Loading local LLM... please wait")
-    llm = Llama(model_path=MODEL_PATH)
+    ssh_host = "basic.cs.rutgers.edu"
+    ssh_user = input("NetID: ")
+    ssh_pass = getpass("iLab password: ")
+
+    with open("schema_prompt.sql") as f:
+        schema = f.read()
 
     while True:
         question = input("\nAsk a question (or type 'exit'): ")
-        if question.lower() == "exit":
+        if question.strip().lower() == "exit":
             break
 
-        prompt = generate_prompt(schema, question)
-        print("\n[LLM Prompting...]\n")
+        prompt = f"""Write a SELECT SQL query for the following schema and question:
 
-        response = llm(prompt, max_tokens=200)
-        llm_output = response["choices"][0]["text"]
+SCHEMA:
+{schema}
 
-        print("\n[Raw LLM Output]:")
-        print(llm_output)
+QUESTION:
+{question}
 
-        sql_query = extract_sql(llm_output)
-        print("\n[Extracted SQL Query]:")
-        print(sql_query)
+SQL:"""
+        llm_output = get_llm_response(prompt, llm)
+        sql = extract_sql(llm_output)
 
-        if not sql_query.lower().startswith("select"):
-            print("\n[!] Only SELECT queries are allowed. Try again.")
-            continue
-
-        print("\n[Querying ILAB server...]\n")
-        result = run_query_over_ssh(sql_query, username, password)
-        print("[Result from ILAB]:\n")
-        print(result)
+        if sql:
+            print(f"\n[SQL Query]: {sql}")
+            result, err = send_query_over_ssh(sql, ssh_host, ssh_user, ssh_pass)
+            print(result if not err else err)
+        else:
+            print("Could not extract SQL from LLM output.")
 
 if __name__ == "__main__":
     main()

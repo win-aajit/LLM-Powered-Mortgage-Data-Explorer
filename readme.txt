@@ -1,6 +1,6 @@
 CS336 Project 2 Group 31 Readme 
 
-Group Members: Gilad Bejarano (gb534), Ashwin Ajit (aa2484)
+Group Members: Gilad Bejarano (gb534), Ashwin Ajit (aa2484), Pranav Ambulkar (pa468)
 
 Overall this project was the most challenging out of the three. We found it challenging to integrate the LLM 
 with the sql script. Throughout the project, we were facing errors with the LLM due to issues with the download, it was very difficult to overcome this

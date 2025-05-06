@@ -14,3 +14,4 @@ schema_subset.sql (schema of the database to be fed to the LLM to give context f
 References:
 ChatGPT (all chat transcript screenshots included in submission) for help with configuring the LLM as well as explaining the instructions more simply.
 LLM API: https://openrouter.ai/qwen/qwen3-1.7b:free/api
+ 

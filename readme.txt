@@ -10,6 +10,7 @@ populate_db.sql (sql script used to populate the database with all relevant data
 database_llm.py (locally run file which handles llm and ssh tunneling)
 ilab_script.py (run on ilab machine, queries database and returns response to database_llm.py)
 schema_subset.sql (schema of the database to be fed to the LLM to give context for better SQL queries)
+AI Chat Transcripts folder (contains all screenshots from conversations with AI for assistance with this assignment)
 
 References:
 ChatGPT (all chat transcript screenshots included in submission) for help with configuring the LLM as well as explaining the instructions more simply.
